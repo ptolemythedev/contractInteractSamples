@@ -4,6 +4,7 @@ const moment = require('moment');
 const ora = require('ora');
 const { table } = require('table');
 
+require('events').EventEmitter.defaultMaxListeners = 20;
 const timeStampFormat = 'YYYY/MM/DD HH:mm'
 const erc20ABI = ["function name() view returns (string)","function symbol() view returns (string)","function decimals() view returns (uint8)","function totalSupply() view returns (uint256)","function balanceOf(address account) view returns (uint256)","function transfer(address recipient, uint256 amount) returns (bool)","function allowance(address owner, address spender) view returns (uint256)","function approve(address spender, uint256 amount) returns (bool)","function transferFrom(address sender, address recipient, uint256 amount) returns (bool)","event Transfer(address indexed from, address indexed to, uint256 value)","event Approval(address indexed owner, address indexed spender, uint256 value)"];
 const arbiscanApiKey = '5NCZP99H3XUVK4Z5UWQNQJV9DDHCHZ5GXR';
@@ -11,7 +12,6 @@ const blockChunkSize = 50000; // Reduce the chunk size to 10,000 to ensure we ar
 const rpcUrls = [
   "https://arb-mainnet.g.alchemy.com/v2/ayLI4xr8NNQN90i74vD11e9w2sSYdxrz",
   "https://arbitrum-mainnet.infura.io/v3/ff8ccca5f2ae445dae9b1d836b08045f",
-  "https://arbitrum-one.publicnode.com",
   "https://arb1.arbitrum.io/rpc"
 ];
 
@@ -83,12 +83,12 @@ async function main() {
     ['Published On', `${formattedPublishTime}`],
     ['StartTime', `${formattedStartTime}`],
     ['Harvest StartTime', `${formattedHarvestStartTime}`],
-    ['Deposit EndTime', `${formattedDepositEndTime}`],
-    ['EndTime', `${formattedEndTime}`],
-    ['Minimum Lock Duration Required', `${Number(lockDurationReq) > 0 ? formattedLockDurationReq : 'N/A'}`],
-    ['Should be locked at least until', `${Number(lockEndReq) > 0 ? formattedLockEndReq: 'N/A'}`],
-    [`Minimum ${token0Symbol}-${token1Symbol} Deposit Required`, `${Number(depositAmountReq) > 0 ? formattedDepositAmountReq: 'N/A'}`],
-    ['Whitelisted Access', `${whitelist ? 'YES' : 'NO'}`]
+    ['Deposit EndTime', `${formattedDepositEndTime} (After ${moment.duration((Number(depositEndTime) - Number(startTime)) * 1000).asDays()} days of StartTime)`],
+    ['EndTime', `${formattedEndTime} (After ${moment.duration((Number(endTime) - Number(startTime)) * 1000).asDays()} days of StartTime)`],
+    ['Minimum Days spNFT to be locked', `${Number(lockDurationReq) > 0 ? formattedLockDurationReq : 'N/A'}`],
+    ['spNFT should be locked at least until', `${Number(lockEndReq) > 0 ? formattedLockEndReq: 'N/A'}`],
+    [`Minimum ${token0Symbol}-${token1Symbol} deposit required in the spNFT`, `${Number(depositAmountReq) > 0 ? formattedDepositAmountReq: 'N/A'}`],
+    ['Whitelisting requirement for deposits', `${whitelist ? 'Required' : 'N/A'}`]
   ];
 
 console.log(table(data));
@@ -99,6 +99,7 @@ console.log(table(data));
   let totalRewardsToken2Added = 0;
   let totalRewardsToken1Harvested = 0;
   let totalRewardsToken2Harvested = 0;
+  let daysSinceStartTime = 0;
   
   // Query in chunks
   const spinner = ora(`Querying for events`).start();
@@ -108,21 +109,12 @@ console.log(table(data));
       toBlock = latestBlock;
     }
 
-    spinner.text = `Scanning block ${fromBlock} to ${toBlock}`;
+    spinner.text = `Scanning block ${fromBlock} to ${toBlock} | ${totalRewardsToken1Added > 0 ? Math.round((100 * totalRewardsToken1Harvested / totalRewardsToken1Added) * 100) / 100 : 0}% ${rewardsToken1Symbol} Harvested | ${totalRewardsToken2Added > 0 ? Math.round((100 * totalRewardsToken2Harvested / totalRewardsToken2Added) * 100) / 100 : 0}% ${rewardsToken2Symbol} Harvested | ${daysSinceStartTime > 0 ? `${Math.floor(daysSinceStartTime)} days since StartTime` : `${Math.floor(-1 * daysSinceStartTime)} days to StartTime`}`;
 
     try {
-      const publishEvents = await nitroPoolContract.queryFilter(nitroPoolContract.filters.Publish(), fromBlock, toBlock);
       const addRewardsToken1events = await nitroPoolContract.queryFilter(nitroPoolContract.filters.AddRewardsToken1(), fromBlock, toBlock);
       const addRewardsToken2events = await nitroPoolContract.queryFilter(nitroPoolContract.filters.AddRewardsToken2(), fromBlock, toBlock);
       const harvestEvents = await nitroPoolContract.queryFilter(nitroPoolContract.filters.Harvest(null), fromBlock, toBlock); // First argument null to match any 'user'
-
-      for (const event of publishEvents) {
-        const block = await provider.getBlock(event.blockNumber);
-        const date = new Date(block.timestamp * 1000);
-        const formattedDate = moment(date).format(timeStampFormat);
-        spinner.clear();
-        console.log(`${token0Symbol}-${token1Symbol} NitroPool PUBLISHED on ${formattedDate}`);
-      };
 
       for (const event of addRewardsToken1events) {
         const block = await provider.getBlock(event.blockNumber);
@@ -147,24 +139,20 @@ console.log(table(data));
       };
 
       for (const event of harvestEvents) {
-        const block = await provider.getBlock(event.blockNumber);
-        const date = new Date(block.timestamp * 1000);
-        const formattedDate = moment(date).format(timeStampFormat);
         const [, rewardsTokenAddress, rewardsTokenAmount] = event.args;
         const rewardsTokenAmountFormatted = ethers.formatEther(rewardsTokenAmount);
 
         if (ethers.getAddress(rewardsTokenAddress) === ethers.getAddress(rewardsToken1Address)) {
-          spinner.clear();
-          console.log(`${rewardsTokenAmountFormatted} ${rewardsToken1Symbol} is HARVESTED on ${formattedDate}`)
           totalRewardsToken1Harvested = totalRewardsToken1Harvested + parseFloat(rewardsTokenAmountFormatted)
         }
         
         if (ethers.getAddress(rewardsTokenAddress) === ethers.getAddress(rewardsToken2Address)) {
-          spinner.clear();
-          console.log(`${rewardsTokenAmountFormatted} ${rewardsToken2Symbol} is HARVESTED on ${formattedDate}`)
           totalRewardsToken2Harvested = totalRewardsToken2Harvested + parseFloat(rewardsTokenAmountFormatted)
         }
       };
+
+      const block = await provider.getBlock(toBlock);
+      daysSinceStartTime = moment.duration((block.timestamp - Number(startTime)) * 1000).asDays()
 
     } catch (error) {
       console.error(`Error fetching events from block ${fromBlock} to ${toBlock}:`, error);
