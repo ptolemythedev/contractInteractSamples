@@ -9,9 +9,10 @@ const erc20ABI = ["function name() view returns (string)","function symbol() vie
 const arbiscanApiKey = '5NCZP99H3XUVK4Z5UWQNQJV9DDHCHZ5GXR';
 const blockChunkSize = 50000; // Reduce the chunk size to 10,000 to ensure we are well within limits
 const rpcUrls = [
-    "https://arbitrum-one.publicnode.com",
-    "https://arbitrum-one.publicnode.com",
-    "https://arb1.arbitrum.io/rpc"
+  "https://arb-mainnet.g.alchemy.com/v2/ayLI4xr8NNQN90i74vD11e9w2sSYdxrz",
+  "https://arbitrum-mainnet.infura.io/v3/ff8ccca5f2ae445dae9b1d836b08045f",
+  "https://arbitrum-one.publicnode.com",
+  "https://arb1.arbitrum.io/rpc"
 ];
 
 async function fetchAbi(contractAddress) {
