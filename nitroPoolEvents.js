@@ -173,10 +173,15 @@ console.log(table(data));
 
   spinner.succeed(`Finished querying ${latestBlock - startBlock} blocks`);
 
-  console.log(`Total ${rewardsToken1Symbol} ADDED: ${totalRewardsToken1Added}`)
-  console.log(`Total ${rewardsToken1Symbol} HARVESTED: ${totalRewardsToken1Harvested}`)
-  console.log(`Total ${rewardsToken2Symbol} ADDED: ${totalRewardsToken2Added}`)
-  console.log(`Total ${rewardsToken2Symbol} HARVESTED: ${totalRewardsToken2Harvested}`)
+  // Print Summary
+  const summary = [
+    [`Total ${rewardsToken1Symbol} ADDED`, `${totalRewardsToken1Added}`],
+    [`Total ${rewardsToken1Symbol} HARVESTED`, `${totalRewardsToken1Harvested}`],
+    [`Total ${rewardsToken2Symbol} ADDED`, `${totalRewardsToken2Added})`],
+    [`Total ${rewardsToken2Symbol} HARVESTED`, `${totalRewardsToken2Harvested})`],
+  ];
+  
+  console.log(table(summary));
 }
 
 main().catch(error => {
